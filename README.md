@@ -91,6 +91,12 @@ Run only selected experiments from the same config:
 python scripts/run_experiments.py --config configs/sample_sentiment140_pipeline.yaml --feature word2vec_default --model birnn_default
 ```
 
+Run only the dedicated Logistic Regression and Naive Bayes tuning pipeline:
+
+```bash
+python scripts/run_traditional_ml_tuning.py --config configs/main_sentiment140_full.yaml
+```
+
 Every run saves:
 
 - `results/<run_id>/summary.csv`
