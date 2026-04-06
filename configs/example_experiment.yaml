@@ -1,0 +1,152 @@
+seed: 42
+
+runtime:
+  device: auto
+  deterministic_torch: true
+
+output:
+  run_name: english_vs_translated_template
+  results_dir: results
+  logs_dir: logs
+  models_dir: models
+  splits_dir: splits
+  save_predictions: false
+
+datasets:
+  imdb_english:
+    path: data/imdb_binary.csv
+    text_column: review
+    label_column: sentiment
+    id_column: review_id
+    task_type: binary
+    positive_label: positive
+    split:
+      mode: create_or_reuse
+      artifact_name: imdb_binary_fixed_split_v1
+      train_size: 0.7
+      val_size: 0.15
+      test_size: 0.15
+      seed: 42
+
+  imdb_azerbaijani_translated:
+    path: data/imdb_binary_az_translated.csv
+    text_column: review
+    label_column: sentiment
+    id_column: review_id
+    task_type: binary
+    positive_label: positive
+    split:
+      mode: reuse
+      artifact_name: imdb_binary_fixed_split_v1
+
+preprocessing:
+  default:
+    lowercase: true
+    url_handling: remove
+    mention_handling: remove
+    hashtag_handling: strip_hash
+    punctuation_handling: remove
+    number_handling: mask
+    whitespace_cleanup: true
+    preserve_emojis: true
+    stopwords:
+      enabled: false
+      source: list
+      words: []
+    normalization:
+      enabled: false
+      type: none
+
+features:
+  count_unigram_bigram:
+    type: count
+    ngram_range: [1, 2]
+    max_features: 20000
+    min_df: 2
+
+  tfidf_unigram_bigram:
+    type: tfidf
+    ngram_range: [1, 2]
+    max_features: 20000
+    min_df: 2
+
+  pmi_signed:
+    type: pmi
+    ngram_range: [1, 1]
+    max_features: 15000
+    min_df: 2
+    binary_occurrence: true
+    smoothing: 1.0e-09
+    use_positive_pmi: false
+
+  word2vec_default:
+    type: word2vec
+    vector_size: 100
+    window: 5
+    min_count: 2
+    epochs: 5
+    workers: 1
+    sg: 1
+    max_sequence_length: 128
+
+models:
+  multinomial_nb:
+    type: multinomial_nb
+    alpha: 1.0
+
+  linear_logreg:
+    type: linear
+    algorithm: logistic_regression
+    c: 1.0
+    max_iter: 2000
+    solver: liblinear
+
+  linear_svm:
+    type: linear
+    algorithm: linear_svm
+    c: 1.0
+    max_iter: 5000
+
+  mlp_default:
+    type: mlp
+    hidden_dims: [256, 64]
+    dropout: 0.2
+    batch_size: 64
+    epochs: 6
+    patience: 2
+    learning_rate: 0.001
+
+  birnn_default:
+    type: birnn
+    hidden_size: 128
+    num_layers: 1
+    dropout: 0.2
+    embedding_trainable: true
+    batch_size: 64
+    epochs: 6
+    patience: 2
+    learning_rate: 0.001
+
+  lstm_default:
+    type: lstm
+    hidden_size: 128
+    num_layers: 1
+    dropout: 0.2
+    embedding_trainable: true
+    batch_size: 64
+    epochs: 6
+    patience: 2
+    learning_rate: 0.001
+
+experiments:
+  - name: imdb_en_count_nb
+    dataset: imdb_english
+    preprocessing: default
+    feature: count_unigram_bigram
+    model: multinomial_nb
+
+  - name: imdb_az_count_nb_same_split
+    dataset: imdb_azerbaijani_translated
+    preprocessing: default
+    feature: count_unigram_bigram
+    model: multinomial_nb

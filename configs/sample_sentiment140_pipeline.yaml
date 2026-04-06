@@ -1,0 +1,177 @@
+seed: 42
+
+runtime:
+  device: auto
+  deterministic_torch: true
+
+output:
+  run_name: sample_sentiment140_pipeline
+  results_dir: results
+  logs_dir: logs
+  models_dir: models
+  splits_dir: splits
+  save_predictions: false
+
+datasets:
+  sentiment140_sample:
+    path: sentiment140_100k_clean_balanced_v2.csv
+    text_column: text
+    label_column: label
+    task_type: binary
+    positive_label: 1
+    sample_size: 1200
+    split:
+      mode: create_or_reuse
+      artifact_name: sentiment140_sample_binary_split_v1
+      train_size: 0.7
+      val_size: 0.15
+      test_size: 0.15
+      seed: 42
+
+preprocessing:
+  social_default:
+    lowercase: true
+    url_handling: remove
+    mention_handling: remove
+    hashtag_handling: strip_hash
+    punctuation_handling: remove
+    number_handling: mask
+    whitespace_cleanup: true
+    preserve_emojis: true
+    stopwords:
+      enabled: false
+      source: list
+      words: []
+    normalization:
+      enabled: false
+      type: none
+
+features:
+  count_unigram_bigram:
+    type: count
+    ngram_range: [1, 2]
+    max_features: 5000
+    min_df: 2
+
+  tfidf_unigram_bigram:
+    type: tfidf
+    ngram_range: [1, 2]
+    max_features: 5000
+    min_df: 2
+
+  pmi_signed:
+    type: pmi
+    ngram_range: [1, 1]
+    max_features: 4000
+    min_df: 2
+    binary_occurrence: true
+    smoothing: 1.0e-09
+    use_positive_pmi: false
+
+  word2vec_default:
+    type: word2vec
+    vector_size: 50
+    window: 5
+    min_count: 2
+    epochs: 3
+    workers: 1
+    sg: 1
+    max_sequence_length: 64
+
+models:
+  multinomial_nb:
+    type: multinomial_nb
+    alpha: 1.0
+
+  linear_logreg:
+    type: linear
+    algorithm: logistic_regression
+    c: 1.0
+    max_iter: 2000
+    solver: liblinear
+
+  mlp_default:
+    type: mlp
+    hidden_dims: [128, 32]
+    dropout: 0.2
+    batch_size: 64
+    epochs: 3
+    patience: 2
+    learning_rate: 0.001
+
+  birnn_default:
+    type: birnn
+    hidden_size: 64
+    num_layers: 1
+    dropout: 0.2
+    embedding_trainable: true
+    batch_size: 64
+    epochs: 3
+    patience: 2
+    learning_rate: 0.001
+
+  lstm_default:
+    type: lstm
+    hidden_size: 64
+    num_layers: 1
+    dropout: 0.2
+    embedding_trainable: true
+    batch_size: 64
+    epochs: 3
+    patience: 2
+    learning_rate: 0.001
+
+experiments:
+  - name: s140_count_nb
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: count_unigram_bigram
+    model: multinomial_nb
+
+  - name: s140_tfidf_nb
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: tfidf_unigram_bigram
+    model: multinomial_nb
+
+  - name: s140_count_linear
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: count_unigram_bigram
+    model: linear_logreg
+
+  - name: s140_tfidf_linear
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: tfidf_unigram_bigram
+    model: linear_logreg
+
+  - name: s140_count_mlp
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: count_unigram_bigram
+    model: mlp_default
+
+  - name: s140_tfidf_mlp
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: tfidf_unigram_bigram
+    model: mlp_default
+
+  - name: s140_pmi_linear
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: pmi_signed
+    model: linear_logreg
+
+  - name: s140_word2vec_birnn
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: word2vec_default
+    model: birnn_default
+
+  - name: s140_word2vec_lstm
+    dataset: sentiment140_sample
+    preprocessing: social_default
+    feature: word2vec_default
+    model: lstm_default

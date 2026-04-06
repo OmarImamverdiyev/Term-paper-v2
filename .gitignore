@@ -1,0 +1,57 @@
+# Python cache and tooling
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Generated experiment outputs
+logs/
+models/
+results/
+splits/
+output_english/
+word2vec/
+configs/*_resolved_config.yaml
+
+# Generated data files
+data/*.csv
+data/*.tsv
+data/*.json
+data/*.jsonl
+!data/README.md
+
+# Large local datasets kept outside Git
+Sentiment140.csv
+Sentiment140_v2.csv
+sentiment140_100k_clean_balanced.csv
+sentiment140_100k_clean_balanced_v2.csv
+
+# Task2 local build and nested repo metadata
+Task2/word2vec/*.exe
+Task2/word2vec/.git/

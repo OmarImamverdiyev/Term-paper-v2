@@ -1,0 +1,139 @@
+seed: 42
+
+runtime:
+  device: auto
+  deterministic_torch: true
+
+output:
+  run_name: english_word2vec_recurrent
+  results_dir: output_english/results
+  logs_dir: output_english/logs
+  models_dir: output_english/checkpoints
+  splits_dir: output_english/splits
+  configs_dir: output_english/configs
+  word2vec_dir: output_english/word2vec
+  save_predictions: true
+
+datasets:
+  sentiment140_english:
+    path: sentiment140_100k_clean_balanced_v2.csv
+    text_column: text
+    label_column: label
+    task_type: binary
+    positive_label: 1
+    split:
+      mode: create_or_reuse
+      artifact_name: sentiment140_100k_clean_balanced_v2_recurrent_split_v1
+      train_size: 0.7
+      val_size: 0.15
+      test_size: 0.15
+      seed: 42
+
+preprocessing:
+  tweet_sentiment_moderate:
+    lowercase: true
+    url_handling: mask
+    mention_handling: mask
+    hashtag_handling: strip_hash
+    punctuation_handling: keep_sentiment
+    compress_punctuation: true
+    number_handling: mask
+    whitespace_cleanup: true
+    preserve_emojis: true
+    stopwords:
+      enabled: false
+      source: list
+      words: []
+    normalization:
+      enabled: false
+      type: none
+
+features:
+  word2vec_tweet_strong:
+    type: word2vec
+    vector_size: 200
+    window: 5
+    min_count: 2
+    sequence_min_freq: 2
+    sg: 1
+    negative: 10
+    epochs: 15
+    workers: 4
+    sample: 1.0e-5
+    ns_exponent: 0.75
+    alpha: 0.025
+    min_alpha: 0.0007
+    max_sequence_length: 56
+    truncation_strategy: head
+    embedding_init_std: 0.05
+    normalize_embeddings: false
+
+models:
+  birnn_word2vec_strong:
+    type: birnn
+    hidden_dim: 128
+    num_layers: 1
+    dropout: 0.35
+    embedding_dropout: 0.15
+    embedding_trainable: true
+    pooling: mean_max
+    classifier_hidden_dim: 128
+    batch_size: 128
+    eval_batch_size: 256
+    epochs: 15
+    patience: 4
+    early_stopping_min_delta: 0.0005
+    learning_rate: 0.001
+    optimizer: adam
+    weight_decay: 1.0e-5
+    gradient_clip_norm: 1.0
+    checkpoint_metric: macro_f1
+    class_weights: none
+    scheduler:
+      type: reduce_on_plateau
+      mode: max
+      factor: 0.5
+      patience: 1
+      threshold: 0.0005
+      min_lr: 1.0e-5
+
+  lstm_word2vec_strong:
+    type: lstm
+    hidden_dim: 128
+    num_layers: 1
+    dropout: 0.35
+    embedding_dropout: 0.15
+    embedding_trainable: true
+    pooling: mean_max
+    classifier_hidden_dim: 128
+    batch_size: 128
+    eval_batch_size: 256
+    epochs: 15
+    patience: 4
+    early_stopping_min_delta: 0.0005
+    learning_rate: 0.001
+    optimizer: adam
+    weight_decay: 1.0e-5
+    gradient_clip_norm: 1.0
+    checkpoint_metric: macro_f1
+    class_weights: none
+    scheduler:
+      type: reduce_on_plateau
+      mode: max
+      factor: 0.5
+      patience: 1
+      threshold: 0.0005
+      min_lr: 1.0e-5
+
+experiments:
+  - name: s140_english_word2vec_birnn
+    dataset: sentiment140_english
+    preprocessing: tweet_sentiment_moderate
+    feature: word2vec_tweet_strong
+    model: birnn_word2vec_strong
+
+  - name: s140_english_word2vec_lstm
+    dataset: sentiment140_english
+    preprocessing: tweet_sentiment_moderate
+    feature: word2vec_tweet_strong
+    model: lstm_word2vec_strong
