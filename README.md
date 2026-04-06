@@ -1,5 +1,7 @@
 # Modular Sentiment Research Pipeline
 
+DATASET: https://drive.google.com/drive/folders/1PjAxfQfD__dYNrEGyyZQYpyiE2bL2HDP?usp=sharing
+
 This repository now includes a reusable experiment framework for sentiment classification research in `src/` with config-driven execution from `scripts/run_experiments.py`.
 
 The design goal is to make English experiments and future Azerbaijani translated experiments directly comparable by reusing the exact same saved split artifacts from `splits/`.
