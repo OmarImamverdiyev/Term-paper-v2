@@ -4,6 +4,7 @@ pip install openai python-dotenv pandas tqdm
 """
 
 import json
+import math
 import os
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ TEXT_COLUMN = "text"
 LABEL_COLUMN = "label"
 MODEL_NAME = "gpt-4o-mini"
 POLL_INTERVAL_SECONDS = 15
+MAX_BATCH_REQUESTS = int(os.getenv("BATCH_MAX_REQUESTS", "10000"))
 
 PROMPT_TEMPLATE = (
     "Translate the following text to Azerbaijani while preserving its sentiment "
@@ -60,10 +62,23 @@ def build_prompt(text: str) -> str:
     return PROMPT_TEMPLATE.format(text=text)
 
 
-def create_batch_input_file(texts: pd.Series, total_rows: int, output_path: Path) -> None:
+def get_chunk_file_path(base_path: Path, chunk_number: int, total_chunks: int) -> Path:
+    if total_chunks == 1:
+        return base_path
+    return base_path.with_name(
+        f"{base_path.stem}_part_{chunk_number:03d}{base_path.suffix}"
+    )
+
+
+def create_batch_input_file(
+    texts: pd.Series,
+    total_rows: int,
+    output_path: Path,
+    row_offset: int = 0,
+) -> None:
     with output_path.open("w", encoding="utf-8") as handle:
         for row_index, value in tqdm(
-            enumerate(texts),
+            enumerate(texts, start=row_offset),
             total=total_rows,
             desc="Preparing batch input",
         ):
@@ -111,6 +126,29 @@ def format_status_line(batch: Any) -> str:
     )
 
 
+def get_batch_error_message(batch: Any) -> Optional[str]:
+    errors = get_attr_or_key(batch, "errors")
+    if errors is None:
+        return None
+
+    error_items = get_attr_or_key(errors, "data", [])
+    messages: list[str] = []
+    for error in error_items:
+        message = get_attr_or_key(error, "message")
+        code = get_attr_or_key(error, "code")
+        if message and code:
+            messages.append(f"{code}: {message}")
+        elif message:
+            messages.append(str(message))
+        elif code:
+            messages.append(str(code))
+
+    if not messages:
+        return None
+
+    return " | ".join(messages)
+
+
 def wait_for_batch(client: OpenAI, batch_id: str) -> Any:
     terminal_statuses = {"completed", "failed", "expired", "cancelled"}
 
@@ -124,6 +162,9 @@ def wait_for_batch(client: OpenAI, batch_id: str) -> Any:
                 print("Batch completed")
             else:
                 print(f"Batch finished with status: {status}")
+                error_message = get_batch_error_message(batch)
+                if error_message:
+                    print(f"Batch error: {error_message}")
             return batch
 
         time.sleep(POLL_INTERVAL_SECONDS)
@@ -299,20 +340,54 @@ def main() -> None:
     df = pd.read_csv(INPUT_CSV, encoding="utf-8")
     validate_input_dataframe(df)
 
-    create_batch_input_file(df[TEXT_COLUMN], len(df), BATCH_INPUT_JSONL)
+    total_rows = len(df)
+    total_chunks = max(1, math.ceil(total_rows / MAX_BATCH_REQUESTS))
+    translations: Dict[str, str] = {}
+    failed_ids: Set[str] = set()
 
-    input_file_id = upload_batch_input_file(client, BATCH_INPUT_JSONL)
-    batch = submit_batch_job(client, input_file_id)
-    batch = wait_for_batch(client, get_attr_or_key(batch, "id"))
+    for chunk_index, start_row in enumerate(range(0, total_rows, MAX_BATCH_REQUESTS), start=1):
+        end_row = min(start_row + MAX_BATCH_REQUESTS, total_rows)
+        chunk_df = df.iloc[start_row:end_row]
 
-    output_file_id = get_attr_or_key(batch, "output_file_id")
-    error_file_id = get_attr_or_key(batch, "error_file_id")
+        print(
+            f"Processing chunk {chunk_index}/{total_chunks} "
+            f"(rows {start_row} to {end_row - 1})"
+        )
 
-    output_path = download_batch_file(client, output_file_id, BATCH_OUTPUT_JSONL)
-    error_path = download_batch_file(client, error_file_id, BATCH_ERROR_JSONL)
+        batch_input_path = get_chunk_file_path(BATCH_INPUT_JSONL, chunk_index, total_chunks)
+        batch_output_path = get_chunk_file_path(BATCH_OUTPUT_JSONL, chunk_index, total_chunks)
+        batch_error_path = get_chunk_file_path(BATCH_ERROR_JSONL, chunk_index, total_chunks)
 
-    translations, failed_ids = parse_batch_output_file(output_path)
-    failed_ids.update(parse_batch_error_file(error_path))
+        create_batch_input_file(
+            chunk_df[TEXT_COLUMN],
+            len(chunk_df),
+            batch_input_path,
+            row_offset=start_row,
+        )
+
+        input_file_id = upload_batch_input_file(client, batch_input_path)
+        batch = submit_batch_job(client, input_file_id)
+        batch = wait_for_batch(client, get_attr_or_key(batch, "id"))
+
+        batch_status = get_attr_or_key(batch, "status")
+        if batch_status != "completed":
+            error_message = get_batch_error_message(batch) or "Unknown batch error."
+            raise RuntimeError(
+                f"Chunk {chunk_index}/{total_chunks} failed with status "
+                f"'{batch_status}'. {error_message}"
+            )
+
+        output_file_id = get_attr_or_key(batch, "output_file_id")
+        error_file_id = get_attr_or_key(batch, "error_file_id")
+
+        output_path = download_batch_file(client, output_file_id, batch_output_path)
+        error_path = download_batch_file(client, error_file_id, batch_error_path)
+
+        chunk_translations, chunk_failed_ids = parse_batch_output_file(output_path)
+        chunk_failed_ids.update(parse_batch_error_file(error_path))
+
+        translations.update(chunk_translations)
+        failed_ids.update(chunk_failed_ids)
 
     translated_df, failed_rows = build_translated_dataframe(df, translations)
     failed_rows = max(failed_rows, len(failed_ids))
